@@ -1,0 +1,92 @@
+name: haulback-sweep
+
+# The unattended agent. In this fictional-carrier deployment one hourly
+# run is one simulated carrier day: Haulback works the deployed ledger,
+# then (by default) advances that simulator clock once. The deployed Go
+# ledger remains the single authoritative writer for its snapshot.
+on:
+  schedule:
+    - cron: '37 * * * *'
+  workflow_dispatch:
+    inputs:
+      draft_model:
+        description: 'Optional one-run model override as provider:model (blank = Control Room setting)'
+        type: string
+        default: ''
+      force_schedule:
+        description: 'Run once despite the dashboard day/time window (policy and amount law still apply)'
+        type: boolean
+        default: false
+      advance_days:
+        description: 'Simulator days to advance after the sweep (0-30)'
+        type: string
+        default: '1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: haulback-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      LEDGER_URL: ${{ secrets.LEDGER_URL }}
+      LEDGER_TOKEN: ${{ secrets.LEDGER_TOKEN }}
+      INPUT_DRAFT_MODEL: ${{ inputs.draft_model }}
+      INPUT_FORCE_SCHEDULE: ${{ inputs.force_schedule }}
+      INPUT_ADVANCE_DAYS: ${{ inputs.advance_days }}
+      XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      OSS_BASE_URL: https://api.groq.com/openai/v1
+    steps:
+      - name: Check required secrets
+        run: |
+          missing=0
+          for name in DATABASE_URL LEDGER_URL LEDGER_TOKEN; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Add the $name repository secret first. See README deployment steps."
+              missing=1
+            fi
+          done
+          case "$LEDGER_URL" in
+            */graphql) ;;
+            *) echo "::error::LEDGER_URL must be the full GraphQL address ending in /graphql."; missing=1 ;;
+          esac
+          exit "$missing"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Wake the deployed ledger
+        run: |
+          health="${LEDGER_URL%/graphql}/healthz"
+          for i in $(seq 1 18); do
+            if curl -fsS "$health" >/dev/null; then exit 0; fi
+            echo "Ledger not ready yet (a free service can take about a minute to wake); retry $i/18"
+            sleep 10
+          done
+          echo "::error::Ledger did not become healthy at $health"
+          exit 1
+      - name: Run one Haulback sweep
+        run: |
+          advance="${INPUT_ADVANCE_DAYS:-1}"
+          case "$advance" in
+            ''|*[!0-9]*) echo "::error::advance_days must be a whole number from 0 to 30"; exit 1 ;;
+          esac
+          if [ "$advance" -gt 30 ]; then
+            echo "::error::advance_days must be a whole number from 0 to 30"
+            exit 1
+          fi
+          args=(sweep --advance-days "$advance")
+          if [ -n "$INPUT_DRAFT_MODEL" ]; then args+=(--model "$INPUT_DRAFT_MODEL"); fi
+          if [ "$INPUT_FORCE_SCHEDULE" = 'true' ]; then args+=(--force); fi
+          npx tsx src/cli.ts "${args[@]}"

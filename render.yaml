@@ -1,0 +1,53 @@
+services:
+  # One authoritative process for the fictional carrier world. In a real
+  # deployment this role belongs to carrier/TMS/ERP APIs, not this service.
+  - type: web
+    name: haulback-ledger
+    runtime: docker
+    plan: free
+    dockerfilePath: ./ledger/Dockerfile
+    dockerContext: ./ledger
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: LEDGER_TOKEN
+        generateValue: true
+      - key: WORLD_SEED
+        value: "20261025"
+
+  # Password-protected operator Control Room. After the first deploy,
+  # set LEDGER_URL to https://<haulback-ledger-host>/graphql and copy
+  # the ledger service's LEDGER_TOKEN into this service.
+  - type: web
+    name: haulback-review
+    runtime: docker
+    plan: free
+    dockerfilePath: ./deploy/Dockerfile.agent
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: LEDGER_URL
+        sync: false
+      - key: LEDGER_TOKEN
+        sync: false
+      - key: REVIEW_PASSWORD
+        generateValue: true
+      - key: DASHBOARD_USER
+        value: operator
+      # Optional drafting providers. baseline:rules needs no key and is
+      # the default stored Control Room setting.
+      - key: XAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OSS_BASE_URL
+        value: https://api.groq.com/openai/v1

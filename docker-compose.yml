@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: haulback
+      POSTGRES_PASSWORD: haulback
+      POSTGRES_DB: haulback
+    ports:
+      - "5432:5432"
+    volumes:
+      - haulback-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U haulback -d haulback"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ledger:
+    build: ./ledger
+    environment:
+      DATABASE_URL: postgres://haulback:haulback@db:5432/haulback?sslmode=disable
+      LEDGER_TOKEN: ${LEDGER_TOKEN:-change-me}
+      WORLD_SEED: ${WORLD_SEED:-20261025}
+      PORT: "8090"
+    ports:
+      - "8090:8090"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8090/healthz >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  agent:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.agent
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://haulback:haulback@db:5432/haulback
+      LEDGER_URL: http://ledger:8090/graphql
+      LEDGER_TOKEN: ${LEDGER_TOKEN:-change-me}
+      REVIEW_PASSWORD: ${REVIEW_PASSWORD:-change-me}
+      DASHBOARD_USER: ${DASHBOARD_USER:-operator}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OSS_BASE_URL: ${OSS_BASE_URL:-https://api.groq.com/openai/v1}
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      ledger:
+        condition: service_started
+
+volumes:
+  haulback-db:

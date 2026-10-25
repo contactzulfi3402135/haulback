@@ -1,0 +1,107 @@
+name: haulback-eval
+
+# Manual, isolated evaluation. It uses a throwaway GitHub Postgres and
+# an in-memory copy of the carrier ledger. It never touches the live
+# Neon database or deployed carrier world.
+on:
+  workflow_dispatch:
+    inputs:
+      draft_model:
+        description: 'Haulback draft model as provider:model'
+        type: string
+        default: 'baseline:rules'
+      seed:
+        description: 'Seeded world and bandit seed'
+        type: string
+        default: '20261025'
+      days:
+        description: 'Simulated carrier days per mode (10-365)'
+        type: string
+        default: '75'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: haulback-eval
+  cancel-in-progress: false
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: haulback
+          POSTGRES_PASSWORD: haulback
+          POSTGRES_DB: haulback_eval
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U haulback -d haulback_eval"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://haulback:haulback@localhost:5432/haulback_eval
+      LEDGER_URL: http://localhost:8091/graphql
+      LEDGER_TOKEN: ci-only-token
+      HAULBACK_EVAL_CONFIRM: reset-world
+      XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      OSS_BASE_URL: https://api.groq.com/openai/v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ledger/go.mod
+          cache-dependency-path: ledger/go.sum
+      - run: npm ci
+      - name: Start isolated in-memory carrier ledger
+        run: |
+          (cd ledger && go build -o "$RUNNER_TEMP/haulback-ledger" .)
+          DATABASE_URL= LEDGER_TOKEN="$LEDGER_TOKEN" PORT=8091 WORLD_SEED='${{ inputs.seed }}' \
+            "$RUNNER_TEMP/haulback-ledger" > "$RUNNER_TEMP/ledger.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8091/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/ledger.log"
+          exit 1
+      - name: Evaluate none vs simple vs Haulback
+        run: >-
+          npm run eval --
+          --draft-model '${{ inputs.draft_model }}'
+          --seed '${{ inputs.seed }}'
+          --days '${{ inputs.days }}'
+      - name: Publish scorecard to the run page
+        if: always()
+        run: |
+          latest=$(ls -t results/eval-*.md 2>/dev/null | head -1)
+          if [ -n "$latest" ]; then cat "$latest" >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload full reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: haulback-eval-results
+          path: results/
+          if-no-files-found: warn
+      - name: Commit reports to the repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/
+          if git diff --cached --quiet; then
+            echo "No new results to commit."
+          else
+            git commit -m "Cloud eval results"
+            git push || echo "::warning::Could not push results; they are saved as the run artifact instead."
+          fi

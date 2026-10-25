@@ -1,0 +1,37 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ledger/go.mod
+          cache-dependency-path: ledger/go.sum
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - name: Carrier ledger
+        working-directory: ledger
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          go test ./...
+      - name: Build production images
+        run: |
+          docker build -f deploy/Dockerfile.agent -t haulback-agent:test .
+          docker build -t haulback-ledger:test ./ledger

@@ -1,0 +1,11 @@
+{
+  "grok:grok-4.7": { "inputPer1M": 2.0, "outputPer1M": 6.0 },
+  "grok:grok-4.3": { "inputPer1M": 1.25, "outputPer1M": 2.5 },
+  "Claude:claude-sonnet-4-5": { "inputPer1M": 3.0, "outputPer1M": 15.0 },
+  "Claude:claude-haiku-4-5": { "inputPer1M": 1.0, "outputPer1M": 5.0 },
+  "openai:gpt-5": { "inputPer1M": 1.25, "outputPer1M": 10.0 },
+  "openai:gpt-5-mini": { "inputPer1M": 0.25, "outputPer1M": 2.0 },
+  "oss:openai/gpt-oss-20b": { "inputPer1M": 0.0, "outputPer1M": 0.0, "same_as": "openai:gpt-5-mini" },
+  "oss:gpt-oss-20b": { "inputPer1M": 0.0, "outputPer1M": 0.0, "same_as": "openai:gpt-5-mini" },
+  "baseline:rules": { "inputPer1M": 0.0, "outputPer1M": 0.0 }
+}

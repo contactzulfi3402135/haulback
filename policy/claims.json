@@ -1,0 +1,11 @@
+{
+  "max_appeals_per_claim": 1,
+  "claim_amount_tolerance_cents": 0,
+  "require_evidence": true,
+  "banned_phrases": [
+    "or else", "legal action", "lawsuit", "court", "lawyer up", "police",
+    "fraudster", "thief", "we will ruin", "blacklist", "final warning",
+    "pay twice", "double the amount", "fabricated", "fake proof"
+  ],
+  "note": "Haulback may claim only the amount produced by deterministic contract recalculation. It may not invent evidence, duplicate an active claim, auto-file after a claim deadline, threaten a carrier, or bypass a human for ambiguous/large claims."
+}

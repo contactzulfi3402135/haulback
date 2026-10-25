@@ -1,0 +1,26 @@
+{
+  "name": "haulback",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Haulback: a carrier-overcharge recovery agent that audits shipping bills, files supported claims before deadline, learns carrier evidence preferences, and reconciles posted credits.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/*.ts",
+    "seed": "tsx scripts/seed.ts",
+    "cli": "tsx src/cli.ts",
+    "sweep": "tsx src/cli.ts sweep",
+    "eval": "tsx src/evaluate.ts",
+    "serve": "tsx src/server.ts",
+    "start": "node dist/src/server.js"
+  },
+  "dependencies": { "pg": "^8.13.1" },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

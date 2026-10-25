@@ -1,0 +1,22 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - '$_LOCATION-docker.pkg.dev/$PROJECT_ID/haulback/ledger:latest'
+      - ./ledger
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - deploy/Dockerfile.agent
+      - -t
+      - '$_LOCATION-docker.pkg.dev/$PROJECT_ID/haulback/agent:latest'
+      - .
+images:
+  - '$_LOCATION-docker.pkg.dev/$PROJECT_ID/haulback/ledger:latest'
+  - '$_LOCATION-docker.pkg.dev/$PROJECT_ID/haulback/agent:latest'
+substitutions:
+  _LOCATION: us-central1
+options:
+  logging: GCS_ONLY
